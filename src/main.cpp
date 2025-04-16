@@ -27,7 +27,7 @@ unsigned long lastTime = 0; // Store the last time the data was sent
 float temperature = 0; // Store the temperature value
 float humidity = 0;    // Store the humidity value
 
-float temp_calibration = -6.0; // Store the temperature calibration value
+float temp_calibration = -2.0; // Store the temperature calibration value
 
 const char *ssid = MY_WIFI_SSID;
 const char *password = MY_WIFI_PASS;
