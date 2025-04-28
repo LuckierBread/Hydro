@@ -32,6 +32,36 @@ float temp_calibration = -2.0; // Store the temperature calibration value
 const char *ssid = MY_WIFI_SSID;
 const char *password = MY_WIFI_PASS;
 
+long lastRequestTime = 0; // Store the last request time
+
+void handleSerialRequst()
+{
+  if (Serial.available())
+  {
+    String command = Serial.readStringUntil('\n');
+    command.trim(); // clean up any whitespace
+
+    if (command == "status")
+    {
+      Serial.println("----- SYSTEM STATUS -----");
+      Serial.print("WiFi connected: ");
+      Serial.println(WiFi.isConnected() ? "Yes" : "No");
+
+      Serial.print("IP Address: ");
+      Serial.println(WiFi.localIP());
+
+      Serial.print("Last request time: ");
+      Serial.println(lastRequestTime);
+
+      Serial.println("--------------------------");
+    }
+    else
+    {
+      Serial.println("Unknown command.");
+    }
+  }
+}
+
 void handleDataRequest()
 {
   if (!server.hasArg("token") || server.arg("token") != accessToken)
@@ -67,6 +97,7 @@ void handleDataRequest()
     Serial.println("Data sent to server.");
     Serial.println("Request time taken: " + String(millis() - now) + " ms"); // Print the time taken to send the request
     Serial.println("Waiting for next request...");
+    lastRequestTime = millis(); // Update the last request time
     return;
   }
 }
@@ -120,4 +151,5 @@ void setup()
 void loop()
 {
   server.handleClient(); // Handle incoming client requests
+  handleSerialRequst();
 }
