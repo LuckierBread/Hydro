@@ -14,6 +14,7 @@
 
 #define NUM_LEDS 1
 #define DATA_PIN 48
+#define LIGHT_SENSE_PIN 18
 
 CRGB leds[NUM_LEDS];          // Define LED for FastLED. I don't know how to define a single one without the array.
 CRGB lastColor = CRGB::Black; // use CRGB::Black for no color. Don't use FastLED.clear() to turn off the LED
@@ -22,17 +23,27 @@ DHT dht(DHTPIN, DHTTYPE);
 
 WebServer server(80); // Create a web server object on port 80
 
-unsigned long lastTime = 0; // Store the last time the data was sent
-
-float temperature = 0; // Store the temperature value
-float humidity = 0;    // Store the humidity value
-
+unsigned long lastTime = 0;    // Store the last time the data was sent
+bool errorFlag = false;        // Flag to indicate if there was an error in the last request
 float temp_calibration = -2.0; // Store the temperature calibration value
 
 const char *ssid = MY_WIFI_SSID;
 const char *password = MY_WIFI_PASS;
 
 long lastRequestTime = 0; // Store the last request time
+
+void blinkLED(CRGB color, int times, int delayMs)
+{ // helper function to blink LED codes
+  for (int i = 0; i < times; i++)
+  {
+    leds[0] = color;
+    FastLED.show();
+    delay(delayMs);
+    leds[0] = CRGB::Black;
+    FastLED.show();
+    delay(delayMs);
+  }
+}
 
 void handleSerialRequst()
 {
@@ -74,20 +85,31 @@ void handleDataRequest()
   long now = millis();                                          // Get the current time
   float temperature = dht.readTemperature() + temp_calibration; // Read temperature in Celsius
   float humidity = dht.readHumidity();                          // Read humidity
+  float lightSenseValue = analogRead(LIGHT_SENSE_PIN);          // Read light sensor value
 
   if (isnan(temperature) || isnan(humidity))
   { // Check if the readings are valid
     Serial.println("Failed to read from DHT sensor!");
     server.send(500, "text/plain", "Failed to read from DHT sensor!"); // Send error response
+    errorFlag = true;                                                  // Set error flag
+    return;
+  }
+  else if (isnan(lightSenseValue))
+  {
+    Serial.println("Failed to read from light sensor!");
+    server.send(500, "text/plain", "Failed to read from light sensor!"); // Send error response
+    errorFlag = true;                                                    // Set error flag
     return;
   }
   else
   {
     JsonDocument doc;
-    doc["device_name"] = deviceName;  // Add device name to JSON
-    doc["temperature"] = temperature; // Add temperature to JSON
-    doc["temp_unit"] = "C";           // Add temperature unit to JSON
-    doc["humidity"] = humidity;       // Add humidity to JSON
+    doc["device_name"] = deviceName;                   // Add device name to JSON
+    doc["temperature"] = temperature;                  // Add temperature to JSON
+    doc["temp_unit"] = "C";                            // Add temperature unit to JSON
+    doc["humidity"] = humidity;                        // Add humidity to JSON
+    doc["light_sense_value"] = lightSenseValue / 4095; // Add light sensor value to JSON divided by 4095 for percentage
+    doc["light_sense_unit"] = "%";                     // Add light sensor unit to JSON
 
     String jsonData;              // Create a string to hold the JSON data
     serializeJson(doc, jsonData); // Serialize the JSON document to a string
@@ -130,26 +152,21 @@ void setup()
   Serial.println(WiFi.localIP());
 
   MDNS.begin(deviceName); // Start mDNS service
+  Serial.println("mDNS started @ " + String(deviceName) + ".local");
 
   server.on("/data", HTTP_GET, handleDataRequest); // Handle GET request to "/data"
   server.begin();                                  // Start the server
   Serial.println("HTTP server started");
   Serial.println("Waiting for requests...");
-  leds[0] = CRGB::Green; // Blink 2 times fast when ready
-  FastLED.show();
-  delay(500);
-  leds[0] = CRGB::Black; // Set LED to black (off)
-  FastLED.show();
-  delay(500);
-  leds[0] = CRGB::Green;
-  FastLED.show();
-  delay(500);
-  leds[0] = CRGB::Black; // Set LED to black (off)
-  FastLED.show();
+  blinkLED(CRGB::Green, 3, 200); // Blink green LED to indicate successful boot
 }
 
 void loop()
 {
   server.handleClient(); // Handle incoming client requests
   handleSerialRequst();
+  if (errorFlag)
+  {
+    blinkLED(CRGB::Red, 3, 200); // Blink red LED to indicate error
+  }
 }
